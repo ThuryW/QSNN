@@ -1,0 +1,1 @@
+from .static_img import get_dataset as static_img_dataset
