@@ -5,11 +5,11 @@ torchrun \
     engine.main_train \
     -g 0,1,2 \
     -a resnet20 \
-    -p 32 \
+    -p 2 \
     -s \
-    -t 5 \
+    -t 4 \
     -d cifar10 \
     -e 300 \
-    -lr 0.04 \
+    -lr 0.1 \
     -ld ./log \
     -dd /home/wangtianyu/dataset

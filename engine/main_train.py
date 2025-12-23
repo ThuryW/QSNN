@@ -19,7 +19,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('-g', '--gpus', help='select GPUs', type=str, default='0,1,2,3')
     parser.add_argument('-a', '--arch', help='architecture name', type=str, default=None)
     parser.add_argument('-d', '--dataset', help='dataset name', type=str, default=None)
-    parser.add_argument('-b', '--batch_size', help='batch size', type=int, default=128)
+    parser.add_argument('-b', '--batch_size', help='batch size', type=int, default=256)
     parser.add_argument('-e', '--num_epochs', help='epoch number', type=int, default=200)
     parser.add_argument('-lr', '--learning_rate', help='base learning rate', type=float, default=1e-2)
     parser.add_argument('-s', '--spiking', help='snn', action="store_true", default=False)
@@ -27,6 +27,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('-t', '--timesteps', help='timesteps', type=int, default=4)
     parser.add_argument('-ld', '--log_dir', help='log directory', type=str, default=None)
     parser.add_argument('-dd', '--data_dir', help='dataset directory', type=str, default=None)
+    parser.add_argument('--resume', help='path to checkpoint for finetuning', type=str, default=None)
     return parser.parse_args()
 
 
@@ -51,6 +52,22 @@ def main(rank, args):
     # ----------------          create model        ----------------
     model = arch_dict(spiking, bits, timesteps, arch_name, dataset_name)
     model = model.to(device=rank)
+    
+    # ----------------       load checkpoint        ----------------
+    if args.resume:
+        map_location = {'cuda:%d' % 0: 'cuda:%d' % rank}
+        checkpoint = torch.load(args.resume, map_location=map_location)
+        # 处理可能存在的 'module.' 前缀 (如果是 DDP 保存的)
+        state_dict = checkpoint['state_dict'] if 'state_dict' in checkpoint else checkpoint
+        new_state_dict = {}
+        for k, v in state_dict.items():
+            name = k.replace('module.', '') if k.startswith('module.') else k
+            new_state_dict[name] = v
+        
+        # 加载权重，strict=False 允许在微调时有轻微结构差异（虽然这里架构应该是一样的）
+        msg = model.load_state_dict(new_state_dict, strict=False)
+        if rank == 0:
+            print(f"Loaded checkpoint from {args.resume}. Msg: {msg}")
 
     # ----------------      create dataloader       ----------------
     train_set, test_set = dataset_dict(dataset_name, arch_name, data_dir)
